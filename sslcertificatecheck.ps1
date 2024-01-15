@@ -15,8 +15,8 @@ function Show-PallepadehatBanner() {
 function Check-SSLCertificateExpiry($url) {
     try {
         Show-PallepadehatBanner
-        Write-Host "Checking SSL certificate for $url..."
-        
+        Write-Host "Checking public SSL certificate for $url..."
+
         # Set up a TcpClient to connect to the server
         $tcpClient = [System.Net.Sockets.TcpClient]::new()
         $tcpClient.Connect("$url", 443)
@@ -32,9 +32,9 @@ function Check-SSLCertificateExpiry($url) {
         if ($sslCertificate -ne $null) {
             # Check the expiration date
             $expirationDate = $sslCertificate.GetExpirationDateString()
-            Write-Host "SSL Certificate for $url will expire on: $expirationDate"
+            Write-Host "Public SSL Certificate for $url will expire on: $expirationDate"
         } else {
-            Write-Host "Unable to retrieve SSL certificate information for $url. Certificate not available."
+            Write-Host "Unable to retrieve public SSL certificate information for $url. Certificate not available."
         }
 
         # Close the TcpClient
@@ -44,6 +44,46 @@ function Check-SSLCertificateExpiry($url) {
     }
 }
 
-# Example usage
-$urlToCheck = "pjtoolkit.vercel.app"
-Check-SSLCertificateExpiry $urlToCheck
+function Check-SelfSignedCertificateExpiry($url) {
+    try {
+        Show-PallepadehatBanner
+        Write-Host "Checking self-signed SSL certificate for $url..."
+
+        # Use the IP address 127.0.0.1 instead of localhost
+        $ip = "127.0.0.1"
+
+        # Set up a TcpClient to connect to the server
+        $tcpClient = [System.Net.Sockets.TcpClient]::new()
+        $tcpClient.Connect("$ip", 3000)
+
+        # Set up an SslStream to negotiate the SSL/TLS handshake with the callback to allow self-signed certificates
+        $sslStream = [System.Net.Security.SslStream]::new($tcpClient.GetStream(), $false, { $true })
+        $sslStream.AuthenticateAsClient($url)
+
+        # Get the SSL certificate from the SslStream
+        $sslCertificate = $sslStream.RemoteCertificate
+
+        # Check if the certificate is null (not available)
+        if ($sslCertificate -ne $null) {
+            # Check the expiration date
+            $expirationDate = $sslCertificate.GetExpirationDateString()
+            Write-Host "Self-signed SSL Certificate for $url will expire on: $expirationDate"
+        } else {
+            Write-Host "Unable to retrieve self-signed SSL certificate information for $url. Certificate not available."
+        }
+
+        # Close the TcpClient
+        $tcpClient.Close()
+    } catch {
+        Write-Host "Error: $_"
+    }
+}
+
+# Prompt for certificate type (self-signed or public)
+$checkSelfSigned = Read-Host "Do you want to check a self-signed certificate? (Y/N)"
+$urlToCheck = Read-Host "Enter the URL for SSL certificate"
+if ($checkSelfSigned -eq 'Y' -or $checkSelfSigned -eq 'y') {
+    Check-SelfSignedCertificateExpiry $urlToCheck
+} else {
+    Check-SSLCertificateExpiry $urlToCheck
+}
