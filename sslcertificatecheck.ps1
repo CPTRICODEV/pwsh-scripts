@@ -1,26 +1,32 @@
-function Check-SSLCertificateExpiration($url) {
+function Check-SSLCertificateExpiry($url) {
     try {
-        $request = [System.Net.WebRequest]::Create($url)
-        $request.Method = "HEAD"
-        $response = $request.GetResponse()
-        $cert = $response.GetResponseStream().GetLifetimeService()
+        # Set up a TcpClient to connect to the server
+        $tcpClient = [System.Net.Sockets.TcpClient]::new()
+        $tcpClient.Connect("$url", 443)
 
-        $expirationDate = [System.Security.Cryptography.X509Certificates.X509Certificate2]$cert | Select-Object -ExpandProperty NotAfter
-        $timeUntilExpiration = $expirationDate - (Get-Date)
+        # Set up an SslStream to negotiate the SSL/TLS handshake
+        $sslStream = [System.Net.Security.SslStream]::new($tcpClient.GetStream())
+        $sslStream.AuthenticateAsClient($url)
 
-        $years = [math]::floor($timeUntilExpiration.Days / 365)
-        $months = $timeUntilExpiration.Days % 365 / 30
-        $days = $timeUntilExpiration.Days % 30
+        # Get the SSL certificate from the SslStream
+        $sslCertificate = $sslStream.RemoteCertificate
 
-        Write-Output "SSL certificate for $url expires on: $expirationDate"
+        # Check if the certificate is null (not available)
+        if ($sslCertificate -ne $null) {
+            # Check the expiration date
+            $expirationDate = $sslCertificate.GetExpirationDateString()
+            Write-Host "SSL Certificate for $url will expire on: $expirationDate"
+        } else {
+            Write-Host "Unable to retrieve SSL certificate information for $url. Certificate not available."
+        }
 
-        $formattedTime = "{0} years, {1} months, {2} days" -f $years, $months, $days
-        Write-Output "Time until expiration: $formattedTime"
-    }
-    catch {
-        Write-Error "Error: $_"
+        # Close the TcpClient
+        $tcpClient.Close()
+    } catch {
+        Write-Host "Error: $_"
     }
 }
 
-# Example: Check SSL certificate for "https://www.example.com"
-Check-SSLCertificateExpiration "https://pjtoolkit.vercel.app"
+# Example usage
+$urlToCheck = "pjtoolkit.vercel.app"
+Check-SSLCertificateExpiry $urlToCheck
